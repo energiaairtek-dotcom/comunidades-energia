@@ -366,11 +366,23 @@
         ];
 
         // --- AUTENTICACIÓN Y CARGA DE DATOS ---
-        signInAnonymously(auth).catch((error) => console.error("Error Auth:", error));
+        signInAnonymously(auth).catch((error) => {
+            console.error("Error Auth:", error);
+            // Mostrar error visualmente en vez de quedarse cargando infinito
+            document.getElementById('loading-view').innerHTML = `
+                <i data-lucide="alert-circle" width="48" height="48" class="text-red-500 mb-4"></i>
+                <p class="font-bold text-red-600 text-lg">Error de Autenticación</p>
+                <p class="text-sm text-slate-600 mt-2 px-4 text-center max-w-sm">Asegúrate de habilitar <b>Anónimo</b> en la pestaña <i>Authentication -> Sign-in method</i> de Firebase.</p>
+                <p class="text-xs text-slate-400 mt-4 bg-slate-200 p-2 rounded">${error.message}</p>
+            `;
+            lucide.createIcons();
+        });
 
         onAuthStateChanged(auth, (user) => {
             if (user) {
-                // Escuchar Colecciones
+                console.log("Conectado a Firebase con UID:", user.uid);
+                
+                // Escuchar Colecciones (Con alertas de error de reglas)
                 onSnapshot(collection(db, 'comunidades_nodos'), (snapshot) => {
                     NODES = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     // Ordenar alfabéticamente por nombre
@@ -387,18 +399,21 @@
                     if (nodeParam && NODES.find(n => n.id === nodeParam)) {
                         window.goToNode(nodeParam);
                     }
+                }, (error) => {
+                    console.error("Error leyendo nodos:", error);
+                    alert("Error leyendo la base de datos. Revisa las reglas de seguridad de Firestore.\\nDetalle: " + error.message);
                 });
 
                 onSnapshot(collection(db, 'comunidades_equipos'), (snapshot) => {
                     equipments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     updateNodeView(); 
-                });
+                }, (error) => console.error("Error leyendo equipos:", error));
 
                 onSnapshot(collection(db, 'comunidades_inspecciones'), (snapshot) => {
                     inspections = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     renderHomeNodes();
                     updateNodeView();
-                });
+                }, (error) => console.error("Error leyendo inspecciones:", error));
             }
         });
 
