@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mantenimiento Solar Indígena</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- QR Code Generator -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+    <style>
+        body { background-color: #f8fafc; font-family: system-ui, -apple-system, sans-serif; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        
+        /* Ocultar elementos al imprimir */
+        @media print {
+            @page { margin: 0; size: auto; }
+            body { background-color: white !important; -webkit-print-color-adjust: exact; }
+            .no-print { display: none !important; }
+            .print-only { display: block !important; }
+            #qr-view { display: flex !important; } /* Forzar mostrar el QR al imprimir */
+        }
+        
+        .view-section { display: none; }
+        .view-section.active { display: flex; }
+    </style>
+</head>
+<body class="text-slate-900 min-h-screen">
+
+    <!-- PANTALLA DE CARGA -->
+    <div id="loading-view" class="view-section active flex-col items-center justify-center min-h-screen text-emerald-700 bg-slate-100">
+        <i data-lucide="loader-2" class="animate-spin mb-4" width="48" height="48"></i>
+        <p class="font-medium animate-pulse">Conectando a Airtek DB...</p>
+    </div>
+
+    <!-- VISTA: HOME -->
+    <div id="home-view" class="view-section flex-col min-h-screen bg-slate-50 no-print">
+        <div class="bg-emerald-700 text-white p-6 md:p-10 shadow-lg md:rounded-b-[3rem]">
+            <div class="max-w-4xl mx-auto flex justify-between items-center">
+                <div>
+                    <h1 class="text-2xl md:text-4xl font-bold mb-1">Respaldo Energético</h1>
+                    <p class="text-emerald-100 text-sm md:text-base flex items-center gap-2">
+                        <i data-lucide="cloud" width="16" height="16"></i> Comunidades Indígenas
+                    </p>
+                </div>
+                <i data-lucide="database" width="40" height="40" class="text-emerald-500 opacity-50 hidden md:block"></i>
+            </div>
+        </div>
+
+        <div class="flex-1 p-6 max-w-4xl mx-auto w-full mt-4 md:mt-8">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <div class="flex flex-col md:flex-row justify-between md:items-center mb-6 gap-4">
+                    <h3 class="text-slate-600 text-lg font-bold uppercase tracking-wider flex items-center gap-2">
+                        <i data-lucide="server" width="20" height="20"></i> Directorio de Nodos
+                    </h3>
+                    <p class="text-sm text-slate-500 bg-slate-100 p-3 rounded-lg flex items-center gap-2">
+                        <i data-lucide="qr-code" width="16" height="16" class="text-emerald-600"></i> 
+                        Selecciona un nodo para generar QR o ver historial
+                    </p>
+                </div>
+                <!-- Lista de Nodos -->
+                <div id="nodes-list" class="grid grid-cols-1 md:grid-cols-2 gap-3 custom-scrollbar max-h-[60vh] overflow-y-auto pr-2">
+                    <!-- Se llena por JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- VISTA: NODO DASHBOARD -->
+    <div id="node-view" class="view-section flex-col min-h-screen bg-slate-50 no-print">
+        <div class="bg-emerald-700 text-white p-4 md:p-6 flex items-center justify-between shadow-md z-10 sticky top-0">
+            <div class="flex items-center gap-4">
+                <button onclick="goHome()" class="p-2 hover:bg-emerald-600 rounded-full transition-colors">
+                    <i data-lucide="arrow-left" width="24" height="24"></i>
+                </button>
+                <div>
+                    <h2 id="node-title" class="font-bold text-xl md:text-2xl leading-tight">Nombre del Nodo</h2>
+                    <p class="text-emerald-200 text-sm flex items-center gap-1">
+                        <i data-lucide="database" width="12" height="12"></i> Airtek DB Sync
+                    </p>
+                </div>
+            </div>
+            <button onclick="showView('qr-view')" class="bg-emerald-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition border border-emerald-600 shadow-sm">
+                <i data-lucide="qr-code" width="20" height="20"></i> <span class="hidden md:inline">Imprimir QR</span>
+            </button>
+        </div>
+
+        <div class="max-w-5xl mx-auto w-full flex-1 flex flex-col">
+            <div class="flex border-b border-slate-200 bg-white sticky top-0 z-10">
+                <button onclick="switchTab('historial')" id="tab-historial" class="flex-1 py-4 text-sm md:text-base font-bold border-b-2 border-emerald-600 text-emerald-700 bg-emerald-50/30 flex items-center justify-center gap-2 transition-colors">
+                    <i data-lucide="history" width="18" height="18"></i> Historial
+                </button>
+                <button onclick="switchTab('equipos')" id="tab-equipos" class="flex-1 py-4 text-sm md:text-base font-bold border-b-2 border-transparent text-slate-500 hover:bg-slate-50 flex items-center justify-center gap-2 transition-colors">
+                    <i data-lucide="server" width="18" height="18"></i> Equipos (<span id="eq-count">0</span>)
+                </button>
+            </div>
+
+            <div class="flex-1 p-4 md:p-6 pb-20 custom-scrollbar">
+                <!-- CONTENIDO HISTORIAL -->
+                <div id="content-historial" class="space-y-6 block">
+                    <div class="flex justify-end">
+                        <button onclick="showView('inspection-view')" class="w-full md:w-auto bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-md transition">
+                            <i data-lucide="activity" width="20" height="20"></i> Nueva Inspección
+                        </button>
+                    </div>
+                    <div id="inspections-list" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <!-- Se llena por JS -->
+                    </div>
+                </div>
+
+                <!-- CONTENIDO EQUIPOS -->
+                <div id="content-equipos" class="space-y-6 hidden">
+                    <div class="flex justify-end">
+                        <button onclick="showView('equipment-view')" class="w-full md:w-auto bg-slate-800 hover:bg-slate-900 text-white px-6 py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-md transition">
+                            <i data-lucide="plus" width="20" height="20"></i> Añadir Equipo
+                        </button>
+                    </div>
+                    <div id="equipments-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <!-- Se llena por JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- VISTA: GENERADOR DE QR -->
+    <div id="qr-view" class="view-section flex-col min-h-screen bg-slate-100 print:bg-white print:!flex">
+        <div class="bg-slate-800 text-white p-4 flex items-center justify-between shadow-md z-10 sticky top-0 no-print">
+            <button onclick="showView('node-view')" class="p-2 hover:bg-slate-700 rounded-full transition">
+                <i data-lucide="arrow-left" width="24" height="24"></i>
+            </button>
+            <span class="font-bold text-lg">Etiqueta QR</span>
+            <button onclick="window.print()" class="bg-emerald-500 hover:bg-emerald-600 p-2 rounded-lg flex items-center gap-2 transition text-white">
+                <i data-lucide="printer" width="20" height="20"></i>
+            </button>
+        </div>
+
+        <div class="flex-1 flex flex-col items-center justify-center p-6 print:p-0">
+            <p class="text-slate-500 mb-6 text-center max-w-sm no-print">
+                Imprime esta etiqueta y pégala en los equipos de respaldo energético de la comunidad. Los técnicos solo deben escanearla con la cámara de su teléfono.
+            </p>
+
+            <!-- ETIQUETA A IMPRIMIR -->
+            <div class="bg-white p-8 rounded-3xl shadow-2xl print:shadow-none print:border-4 print:border-black print:rounded-2xl border border-slate-200 flex flex-col items-center justify-center w-full max-w-sm">
+                <div class="mb-6 flex items-center gap-2 text-slate-800">
+                    <i data-lucide="sun" width="28" height="28" class="text-emerald-600"></i>
+                    <h2 class="text-xl font-black tracking-tight uppercase">Respaldo Airtek</h2>
+                </div>
+                
+                <div class="bg-white p-4 border-4 border-slate-900 rounded-xl mb-6 flex justify-center w-full">
+                    <div id="qrcode-container"></div>
+                </div>
+
+                <div class="text-center w-full">
+                    <p class="text-xs text-slate-500 font-bold uppercase tracking-widest mb-1">Ubicación / Nodo</p>
+                    <h1 id="qr-node-name" class="text-2xl font-black text-slate-900 leading-tight">Nombre Nodo</h1>
+                </div>
+                
+                <div class="mt-6 border-t border-slate-200 pt-4 w-full text-center">
+                    <p class="text-[10px] text-slate-400 font-medium">Escanea para registrar mantenimiento en Odoo</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- VISTA: NUEVA INSPECCIÓN -->
+    <div id="inspection-view" class="view-section flex-col min-h-screen bg-slate-50 no-print">
+        <div class="bg-emerald-700 text-white p-4 flex items-center justify-between shadow-md z-10 sticky top-0">
+            <button onclick="showView('node-view')" class="p-2 hover:bg-emerald-600 rounded-full transition">
+                <i data-lucide="arrow-left" width="24" height="24"></i>
+            </button>
+            <span class="font-bold text-lg">Nueva Inspección</span>
+            <div class="w-10"></div>
+        </div>
+
+        <div class="flex-1 p-4 md:p-8 flex justify-center custom-scrollbar overflow-y-auto">
+            <form id="form-inspection" class="w-full max-w-2xl space-y-6 pb-20">
+                <!-- Datos Generales -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                    <h3 class="text-sm font-bold text-emerald-600 uppercase tracking-wider mb-4 flex items-center gap-2">
+                        <i data-lucide="activity" width="16" height="16"></i> Datos Generales
+                    </h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-bold text-slate-700 mb-1">Técnicos a cargo *</label>
+                            <input type="text" id="insp-techs" required placeholder="Ej. Juan Pérez, Carlos Gómez" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:border-emerald-500 focus:bg-white transition">
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 mb-1">Voltaje Batería (V)</label>
+                                <div class="relative">
+                                    <i data-lucide="battery" width="18" height="18" class="absolute left-3 top-3.5 text-slate-400"></i>
+                                    <input type="number" step="0.01" id="insp-vbat" placeholder="0.00" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 pl-10 outline-none focus:border-emerald-500 focus:bg-white transition">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 mb-1">Voltaje Paneles (V)</label>
+                                <div class="relative">
+                                    <i data-lucide="sun" width="18" height="18" class="absolute left-3 top-3.5 text-slate-400"></i>
+                                    <input type="number" step="0.01" id="insp-vpan" placeholder="0.00" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 pl-10 outline-none focus:border-emerald-500 focus:bg-white transition">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Checklist -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                    <h3 class="text-sm font-bold text-emerald-600 uppercase tracking-wider mb-4 flex items-center gap-2">
+                        <i data-lucide="check-square" width="16" height="16"></i> Checklist
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2" id="checklist-container">
+                        <!-- Generado por JS -->
+                    </div>
+                </div>
+
+                <!-- Odoo -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                    <h3 class="text-sm font-bold text-emerald-600 uppercase tracking-wider mb-4 flex items-center gap-2">
+                        <i data-lucide="file-text" width="16" height="16"></i> Odoo Sync
+                    </h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-bold text-slate-700 mb-1">Número de ODT *</label>
+                            <div class="relative">
+                                <i data-lucide="file-text" width="18" height="18" class="absolute left-3 top-3.5 text-slate-400"></i>
+                                <input type="text" id="insp-odt" required placeholder="Ej. ODT-2026-001" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 pl-10 outline-none focus:border-emerald-500 focus:bg-white transition">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-slate-700 mb-1">Link de la ODT</label>
+                            <div class="relative">
+                                <i data-lucide="link" width="18" height="18" class="absolute left-3 top-3.5 text-slate-400"></i>
+                                <input type="url" id="insp-link" placeholder="https://tu-odoo.com/..." class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 pl-10 outline-none focus:border-emerald-500 focus:bg-white transition">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" id="btn-save-insp" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white p-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md">
+                    <i data-lucide="save" width="24" height="24"></i> Subir Inspección
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- VISTA: NUEVO EQUIPO -->
+    <div id="equipment-view" class="view-section flex-col min-h-screen bg-slate-50 no-print">
+        <div class="bg-slate-800 text-white p-4 flex items-center justify-between shadow-md z-10 sticky top-0">
+            <button onclick="showView('node-view')" class="p-2 hover:bg-slate-700 rounded-full transition">
+                <i data-lucide="arrow-left" width="24" height="24"></i>
+            </button>
+            <span class="font-bold text-lg">Registrar Equipo</span>
+            <div class="w-10"></div>
+        </div>
+
+        <div class="flex-1 p-4 md:p-8 flex justify-center">
+            <form id="form-equipment" class="w-full max-w-xl space-y-6">
+                <div class="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-100 space-y-5">
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 mb-2">Tipo de Equipo</label>
+                        <select id="eq-type" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 outline-none focus:border-slate-500 focus:bg-white transition cursor-pointer">
+                            <option>Panel Solar</option>
+                            <option>Inversor</option>
+                            <option>Controlador Solar</option>
+                            <option>Batería</option>
+                            <option>Switch / Router</option>
+                            <option>Radio Enlace</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 mb-2">Modelo *</label>
+                        <input type="text" id="eq-model" required placeholder="Ej. Victron SmartSolar MPPT" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 outline-none focus:border-slate-500 focus:bg-white transition">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 mb-2">Número de Serial *</label>
+                        <input type="text" id="eq-serial" required placeholder="Ej. HQ2110XXXXX" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 outline-none focus:border-slate-500 focus:bg-white transition uppercase">
+                    </div>
+                </div>
+
+                <button type="submit" id="btn-save-eq" class="w-full bg-slate-800 hover:bg-slate-900 text-white p-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md">
+                    <i data-lucide="plus" width="24" height="24"></i> Añadir al Inventario
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- SCRIPT PRINCIPAL CON FIREBASE MODULAR (ES MODULES) -->
+    <script type="module">
+        // Importaciones de Firebase (CDN Oficial Modular)
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+
+        // TUS CREDENCIALES
+        const firebaseConfig = {
+            apiKey: "AIzaSyDwaK4Z26RfqDwNvwdMqri08oEjwG9qymc",
+            authDomain: "almacen-airtek.firebaseapp.com",
+            projectId: "almacen-airtek",
+            storageBucket: "almacen-airtek.firebasestorage.app",
+            messagingSenderId: "934058211778",
+            appId: "1:934058211778:web:6cc9d820c41fa90aa5fe5b"
+        };
+
+        // Iniciar Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // Nodos base
+        const NODES = [
+            { id: 'nodo-estrella', name: 'NODO COMUNIDAD LA ESTRELLA' },
+            { id: 'nodo-policia-km62', name: 'NODO POLICIA KM62' },
+            { id: 'nodo-4-vias', name: 'NODO 4 VIAS' },
+            { id: 'nodo-marala', name: 'NODO COMUNIDAD MARALA' },
+            { id: 'nodo-piasapa', name: 'NODO COMUNIDAD PIASAPA' },
+            { id: 'nodo-yawaka', name: 'NODO COMUNIDAD YAWAKA' },
+            { id: 'nodo-maranomana', name: 'NODO COMUNIDAD MARAÑOMANA' },
+            { id: 'nodo-eirratamana', name: 'NODO COMUNIDAD EIRRATAMANA' },
+            { id: 'nodo-mayapo', name: 'NODO COMUNIDAD MAYAPO' },
+        ];
+
+        // Estado global
+        window.activeNodeId = null;
+        let equipments = [];
+        let inspections = [];
+        
+        // Estado del checklist
+        window.checksState = {
+            videoEnergizados: false, retorqueo: false, limpieza: false, inspeccionRedes: false, registroFotografico: false
+        };
+        const checksConfig = [
+            { key: 'videoEnergizados', label: 'Video equipos energizados' },
+            { key: 'retorqueo', label: 'Retorqueo de terminales' },
+            { key: 'limpieza', label: 'Limpieza de baterías' },
+            { key: 'inspeccionRedes', label: 'Inspección red alimentación' },
+            { key: 'registroFotografico', label: 'Registro fotográfico Gral.' }
+        ];
+
+        // --- AUTENTICACIÓN Y CARGA DE DATOS ---
+        signInAnonymously(auth).catch((error) => console.error("Error Auth:", error));
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                // Escuchar Colecciones
+                onSnapshot(collection(db, 'comunidades_equipos'), (snapshot) => {
+                    equipments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    updateNodeView(); 
+                });
+
+                onSnapshot(collection(db, 'comunidades_inspecciones'), (snapshot) => {
+                    inspections = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    renderHomeNodes();
+                    updateNodeView();
+                    
+                    // Quitar pantalla de carga
+                    showView('home-view');
+                    
+                    // Revisar Deep Linking (si viene de escanear QR)
+                    const params = new URLSearchParams(window.location.search);
+                    const nodeParam = params.get('node');
+                    if (nodeParam && NODES.find(n => n.id === nodeParam)) {
+                        window.goToNode(nodeParam);
+                    }
+                });
+            }
+        });
+
+        // --- FUNCIONES DE NAVEGACIÓN ---
+        window.showView = (viewId) => {
+            document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
+            document.getElementById(viewId).classList.add('active');
+            lucide.createIcons(); // Refrescar íconos
+            
+            if(viewId === 'qr-view') generateQR();
+            if(viewId === 'inspection-view') renderChecklist();
+        };
+
+        window.goHome = () => {
+            window.activeNodeId = null;
+            
+            // Try/catch añadido para evitar SecurityError en entornos locales o iframe (blob:)
+            try {
+                if(window.location.search) {
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                }
+            } catch (e) {
+                console.warn("Entorno local: No se pudo modificar el historial de URL.", e);
+            }
+            
+            showView('home-view');
+        };
+
+        window.goToNode = (nodeId) => {
+            window.activeNodeId = nodeId;
+            const node = NODES.find(n => n.id === nodeId);
+            document.getElementById('node-title').innerText = node.name;
+            switchTab('historial');
+            updateNodeView();
+            showView('node-view');
+        };
+
+        // --- RENDERIZADO DE INTERFAZ ---
+        function renderHomeNodes() {
+            const container = document.getElementById('nodes-list');
+            container.innerHTML = NODES.map(node => {
+                const count = inspections.filter(i => i.nodeId === node.id).length;
+                return `
+                <button onclick="goToNode('${node.id}')" class="w-full flex items-center justify-between p-4 hover:bg-slate-50 rounded-xl text-left transition-colors border border-slate-200 hover:border-emerald-400 group shadow-sm">
+                    <div class="flex items-center gap-3">
+                        <div class="bg-emerald-50 p-3 rounded-lg text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                            <i data-lucide="activity" width="20" height="20"></i>
+                        </div>
+                        <div>
+                            <span class="font-bold text-slate-700 block text-sm md:text-base group-hover:text-emerald-700">${node.name}</span>
+                            <span class="text-xs text-slate-500 font-medium">${count} mantenimientos</span>
+                        </div>
+                    </div>
+                    <i data-lucide="chevron-right" width="20" height="20" class="text-slate-300 group-hover:text-emerald-600"></i>
+                </button>`;
+            }).join('');
+            lucide.createIcons();
+        }
+
+        window.switchTab = (tab) => {
+            document.getElementById('content-historial').classList.toggle('hidden', tab !== 'historial');
+            document.getElementById('content-equipos').classList.toggle('hidden', tab !== 'equipos');
+            
+            const tabH = document.getElementById('tab-historial');
+            const tabE = document.getElementById('tab-equipos');
+            
+            if(tab === 'historial') {
+                tabH.className = "flex-1 py-4 text-sm md:text-base font-bold border-b-2 border-emerald-600 text-emerald-700 bg-emerald-50/30 flex items-center justify-center gap-2 transition-colors";
+                tabE.className = "flex-1 py-4 text-sm md:text-base font-bold border-b-2 border-transparent text-slate-500 hover:bg-slate-50 flex items-center justify-center gap-2 transition-colors";
+            } else {
+                tabE.className = "flex-1 py-4 text-sm md:text-base font-bold border-b-2 border-emerald-600 text-emerald-700 bg-emerald-50/30 flex items-center justify-center gap-2 transition-colors";
+                tabH.className = "flex-1 py-4 text-sm md:text-base font-bold border-b-2 border-transparent text-slate-500 hover:bg-slate-50 flex items-center justify-center gap-2 transition-colors";
+            }
+        };
+
+        function updateNodeView() {
+            if(!window.activeNodeId) return;
+
+            const nodeEquips = equipments.filter(e => e.nodeId === window.activeNodeId);
+            const nodeInsps = inspections.filter(i => i.nodeId === window.activeNodeId).sort((a,b) => (b.date || 0) - (a.date || 0));
+
+            document.getElementById('eq-count').innerText = nodeEquips.length;
+
+            // Render Inspecciones
+            const inspContainer = document.getElementById('inspections-list');
+            if(nodeInsps.length === 0) {
+                inspContainer.innerHTML = `
+                    <div class="col-span-1 md:col-span-2 text-center p-12 text-slate-400 bg-white rounded-2xl border border-dashed border-slate-300">
+                        <i data-lucide="activity" width="64" height="64" class="mx-auto mb-4 opacity-20"></i>
+                        <p class="text-lg">No hay inspecciones registradas.</p>
+                    </div>`;
+            } else {
+                inspContainer.innerHTML = nodeInsps.map(insp => `
+                    <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+                        <div class="flex justify-between items-start mb-3">
+                            <span class="font-bold text-slate-800">${new Date(insp.date).toLocaleDateString('es-VE')}</span>
+                            <span class="text-xs bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full font-bold flex items-center gap-1 border border-emerald-200">
+                                <i data-lucide="file-text" width="12" height="12"></i> ODT: ${insp.odtNumber}
+                            </span>
+                        </div>
+                        <p class="text-sm text-slate-600 mb-4 bg-slate-50 p-2 rounded-lg"><span class="font-bold">Técnicos:</span> ${insp.technicians}</p>
+                        <div class="grid grid-cols-2 gap-3 mb-4">
+                            <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center">
+                                <span class="block text-xs text-slate-500 mb-1 flex items-center justify-center gap-1"><i data-lucide="battery" width="14" height="14"></i> Bat.</span>
+                                <span class="font-bold text-slate-800 text-lg">${insp.batteryVoltage || 'N/A'} V</span>
+                            </div>
+                            <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center">
+                                <span class="block text-xs text-slate-500 mb-1 flex items-center justify-center gap-1"><i data-lucide="sun" width="14" height="14"></i> Panel</span>
+                                <span class="font-bold text-slate-800 text-lg">${insp.arrayVoltage || 'N/A'} V</span>
+                            </div>
+                        </div>
+                        ${insp.odtLink ? `<a href="${insp.odtLink}" target="_blank" class="text-emerald-600 text-sm font-medium flex items-center gap-1 hover:underline"><i data-lucide="link" width="14" height="14"></i> Ver en Odoo</a>` : ''}
+                    </div>
+                `).join('');
+            }
+
+            // Render Equipos
+            const eqContainer = document.getElementById('equipments-list');
+            if(nodeEquips.length === 0) {
+                eqContainer.innerHTML = `
+                    <div class="col-span-full text-center p-12 text-slate-400 bg-white rounded-2xl border border-dashed border-slate-300">
+                        <i data-lucide="server" width="64" height="64" class="mx-auto mb-4 opacity-20"></i>
+                        <p class="text-lg">No hay equipos inventariados en este nodo.</p>
+                    </div>`;
+            } else {
+                eqContainer.innerHTML = nodeEquips.map(eq => {
+                    let icon = 'settings-2';
+                    if(eq.type === 'Panel Solar') icon = 'sun';
+                    if(eq.type === 'Batería') icon = 'battery';
+                    
+                    return `
+                    <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 hover:shadow-md transition">
+                        <div class="bg-slate-50 p-4 rounded-xl text-slate-600 border border-slate-100">
+                            <i data-lucide="${icon}" width="32" height="32"></i>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-slate-800 md:text-lg">${eq.type}</h4>
+                            <p class="text-sm text-slate-600 mt-1"><span class="font-medium">Mod:</span> ${eq.model}</p>
+                            <p class="text-sm text-slate-600"><span class="font-medium">S/N:</span> ${eq.serial}</p>
+                        </div>
+                    </div>`;
+                }).join('');
+            }
+            lucide.createIcons();
+        }
+
+        // --- GENERADOR DE QR ---
+        function generateQR() {
+            const node = NODES.find(n => n.id === window.activeNodeId);
+            document.getElementById('qr-node-name').innerText = node.name;
+            
+            const qrContainer = document.getElementById('qrcode-container');
+            qrContainer.innerHTML = ""; // Limpiar anterior
+            
+            const url = `${window.location.origin}${window.location.pathname}?node=${node.id}`;
+            
+            new QRCode(qrContainer, {
+                text: url,
+                width: 200,
+                height: 200,
+                colorDark : "#0f172a", // slate-900
+                colorLight : "#ffffff",
+                correctLevel : QRCode.CorrectLevel.H
+            });
+        }
+
+        // --- CHECKLIST LÓGICA ---
+        window.toggleCheck = (key) => {
+            window.checksState[key] = !window.checksState[key];
+            renderChecklist();
+        };
+
+        function renderChecklist() {
+            const container = document.getElementById('checklist-container');
+            container.innerHTML = checksConfig.map(item => `
+                <button type="button" onclick="toggleCheck('${item.key}')" class="flex items-center gap-3 p-4 rounded-xl text-left transition-colors border ${window.checksState[item.key] ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-100 hover:bg-slate-100'}">
+                    <i data-lucide="${window.checksState[item.key] ? 'check-square' : 'square'}" width="24" height="24" class="${window.checksState[item.key] ? 'text-emerald-500' : 'text-slate-300'}"></i>
+                    <span class="text-sm md:text-base ${window.checksState[item.key] ? 'text-emerald-800 font-bold' : 'text-slate-600 font-medium'}">${item.label}</span>
+                </button>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        // --- GUARDAR DATOS EN FIREBASE ---
+        document.getElementById('form-inspection').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('btn-save-insp');
+            btn.innerHTML = '<i data-lucide="loader-2" class="animate-spin"></i> Guardando...';
+            btn.disabled = true;
+
+            try {
+                const data = {
+                    nodeId: window.activeNodeId,
+                    technicians: document.getElementById('insp-techs').value,
+                    batteryVoltage: document.getElementById('insp-vbat').value,
+                    arrayVoltage: document.getElementById('insp-vpan').value,
+                    odtNumber: document.getElementById('insp-odt').value,
+                    odtLink: document.getElementById('insp-link').value,
+                    checks: window.checksState,
+                    date: Date.now(),
+                    createdAt: serverTimestamp()
+                };
+
+                await addDoc(collection(db, 'comunidades_inspecciones'), data);
+                
+                // Limpiar form
+                e.target.reset();
+                window.checksState = { videoEnergizados: false, retorqueo: false, limpieza: false, inspeccionRedes: false, registroFotografico: false };
+                
+                showView('node-view');
+            } catch (error) {
+                console.error("Error:", error);
+                alert("Error al guardar en la nube.");
+            } finally {
+                btn.innerHTML = '<i data-lucide="save"></i> Subir Inspección';
+                btn.disabled = false;
+                lucide.createIcons();
+            }
+        });
+
+        document.getElementById('form-equipment').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('btn-save-eq');
+            btn.innerHTML = '<i data-lucide="loader-2" class="animate-spin"></i> Guardando...';
+            btn.disabled = true;
+
+            try {
+                const data = {
+                    nodeId: window.activeNodeId,
+                    type: document.getElementById('eq-type').value,
+                    model: document.getElementById('eq-model').value,
+                    serial: document.getElementById('eq-serial').value.toUpperCase(),
+                    createdAt: serverTimestamp()
+                };
+
+                await addDoc(collection(db, 'comunidades_equipos'), data);
+                e.target.reset();
+                showView('node-view');
+            } catch (error) {
+                console.error("Error:", error);
+                alert("Error al guardar en la nube.");
+            } finally {
+                btn.innerHTML = '<i data-lucide="plus"></i> Añadir al Inventario';
+                btn.disabled = false;
+                lucide.createIcons();
+            }
+        });
+
+        // Inicializar iconos al cargar la página
+        lucide.createIcons();
+    </script>
+</body>
+</html>
